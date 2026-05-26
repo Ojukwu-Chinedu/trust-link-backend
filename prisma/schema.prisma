@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Escrow {
+  id            String   @id @default(cuid())
+  itemName      String
+  amount        Float
+  currency      String
+  buyerAddress  String
+  vendorAddress String
+  state         String   @default("FUNDED")
+  trackingId    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  notifications Notification[]
+}
+
+model Notification {
+  id                String   @id @default(cuid())
+  escrowId          String
+  type              String
+  channel           String
+  recipientAddress  String
+  providerMessageId String?
+  createdAt         DateTime @default(now())
+
+  escrow Escrow @relation(fields: [escrowId], references: [id], onDelete: Cascade)
+}
