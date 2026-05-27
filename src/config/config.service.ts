@@ -11,6 +11,7 @@ export interface Config {
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
   STELLAR_NETWORK: 'TESTNET' | 'MAINNET';
+  API_BASE_URL?: string;
 }
 
 @Injectable()
@@ -33,6 +34,7 @@ export class ConfigService {
       TWILIO_ACCOUNT_SID: this.nestConfigService.get('TWILIO_ACCOUNT_SID', { infer: true }),
       TWILIO_AUTH_TOKEN: this.nestConfigService.get('TWILIO_AUTH_TOKEN', { infer: true }),
       STELLAR_NETWORK: this.get('STELLAR_NETWORK'),
+      API_BASE_URL: this.nestConfigService.get('API_BASE_URL', { infer: true }),
     };
   }
 

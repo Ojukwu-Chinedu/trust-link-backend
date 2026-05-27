@@ -12,6 +12,7 @@ import { EscrowModule } from './escrow/escrow.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { StellarModule } from './stellar/stellar.module';
 import { VendorModule } from './vendor/vendor.module';
+import { StressTestModule } from './stress-test/stress-test.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { VendorModule } from './vendor/vendor.module';
     StellarModule,
     VendorModule,
     AdminStatsModule,
+    StressTestModule,
   ],
   controllers: [AppController],
   providers: [
