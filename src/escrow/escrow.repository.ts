@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { EscrowRecord, PrismaService } from '../prisma/prisma.service';
+import {
+  EscrowRecord,
+  EscrowState,
+  PrismaService,
+} from '../prisma/prisma.service';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 
 @Injectable()
@@ -30,6 +34,23 @@ export class EscrowRepository {
     return this.prisma.escrow.findUnique({ where: { id } });
   }
 
+  findByVendor(vendorAddress: string): Promise<EscrowRecord[]> {
+    return this.prisma.escrow.findMany({ where: { vendorAddress } });
+  }
+
+  findByBuyer(buyerAddress: string): Promise<EscrowRecord[]> {
+    return this.prisma.escrow.findMany({ where: { buyerAddress } });
+  }
+
+  updateState(id: string, state: EscrowState): Promise<EscrowRecord> {
+    return this.prisma.escrow.update({ where: { id }, data: { state } });
+  }
+
+  updateTracking(id: string, trackingId: string): Promise<EscrowRecord> {
+    return this.prisma.escrow.update({ where: { id }, data: { trackingId } });
+  }
+
+  // Pagination helper used by upstream
   findVendorEscrows(
     vendorAddress: string,
     state: string | undefined,
@@ -38,20 +59,24 @@ export class EscrowRepository {
     page: number,
     limit: number,
   ): Promise<{ data: EscrowRecord[]; total: number }> {
-    return this.prisma.escrow.findMany({
-      where: { vendorAddress, state: state as any },
-    }).then((records) => {
-      const sorted = records.sort((a, b) => {
-        const primary = sort === 'amount' ? a.amount - b.amount :
-          a.createdAt.getTime() - b.createdAt.getTime();
-        return order === 'asc' ? primary : -primary;
-      });
+    return this.prisma.escrow
+      .findMany({
+        where: { vendorAddress, state: state as any },
+      })
+      .then((records) => {
+        const sorted = records.sort((a, b) => {
+          const primary =
+            sort === 'amount'
+              ? a.amount - b.amount
+              : a.createdAt.getTime() - b.createdAt.getTime();
+          return order === 'asc' ? primary : -primary;
+        });
 
-      const total = sorted.length;
-      const start = (page - 1) * limit;
-      const data = sorted.slice(start, start + limit);
-      return { data, total };
-    });
+        const total = sorted.length;
+        const start = (page - 1) * limit;
+        const data = sorted.slice(start, start + limit);
+        return { data, total };
+      });
   }
 
   markShipped(id: string, trackingId: string): Promise<EscrowRecord> {
@@ -82,9 +107,63 @@ export class EscrowRepository {
     });
   }
 
-  findAutoReleaseEligible(cutoffDate: Date): Promise<EscrowRecord[]> {
-    return this.prisma.escrow.findMany({
-      where: { state: 'SHIPPED', shippedAt: { lte: cutoffDate } },
+  markDelivered(id: string, deliveredAt = new Date()): Promise<EscrowRecord> {
+    return this.prisma.escrow.update({
+      where: { id },
+      data: {
+        state: 'DELIVERED',
+        deliveredAt,
+        deliveryRecordedAt: deliveredAt,
+      },
     });
+  }
+
+  markAutoReleaseCompleted(
+    id: string,
+    txHash: string,
+    submittedAt = new Date(),
+  ): Promise<EscrowRecord> {
+    return this.prisma.escrow.update({
+      where: { id },
+      data: {
+        state: 'COMPLETED',
+        autoReleaseSubmittedAt: submittedAt,
+        autoReleaseTxHash: txHash,
+      },
+    });
+  }
+
+  markCancelled(id: string): Promise<EscrowRecord> {
+    return this.prisma.escrow.update({
+      where: { id },
+      data: {
+        state: 'CANCELLED',
+        cancelledAt: new Date(),
+      },
+    });
+  }
+
+  findShippedWithTracking(): Promise<EscrowRecord[]> {
+    return this.prisma.escrow
+      .findMany({ where: { state: 'SHIPPED' } })
+      .then((escrows) =>
+        escrows.filter((escrow) => Boolean(escrow.trackingId)),
+      );
+  }
+
+  findAutoReleaseEligible(referenceTime = new Date()): Promise<EscrowRecord[]> {
+    const threshold = new Date(referenceTime.getTime() - 48 * 60 * 60 * 1000);
+
+    return this.prisma.escrow
+      .findMany({ where: { state: 'SHIPPED' } })
+      .then((escrows) =>
+        escrows.filter(
+          (escrow) =>
+            escrow.deliveredAt !== null &&
+            escrow.deliveredAt <= threshold &&
+            escrow.disputeId === null &&
+            escrow.autoReleaseTxHash === null,
+        ),
+      );
   }
 }

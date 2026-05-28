@@ -84,6 +84,27 @@ export class ContractService {
     throw new ContractCallFailedException('Max retries exceeded');
   }
 
+  async recordDelivery(escrowId: string): Promise<string> {
+    if (!this.server) {
+      throw new ContractCallFailedException('Stellar server is not configured');
+    }
+
+    const result = await this.server.submitTransaction({
+      operation: 'recordDelivery',
+      escrowId,
+    });
+
+    if (result.status === 'ERROR' || result.resultXdr === 'TxFailed') {
+      throw new ContractCallFailedException();
+    }
+
+    if (!result.hash) {
+      throw new ContractCallFailedException('Missing transaction hash');
+    }
+
+    return result.hash;
+  }
+
   private isSequenceError(error: unknown): boolean {
     return (
       error instanceof Error && error.message.toLowerCase().includes('sequence')

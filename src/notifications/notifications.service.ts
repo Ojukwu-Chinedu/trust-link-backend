@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import * as crypto from 'crypto';
 import {
   EscrowRecord,
   NotificationType,
@@ -71,20 +72,23 @@ export class NotificationsService {
   }
 
   private async dispatchEmail(
-    type: 'FUNDED' | 'SHIPPED',
+    type: NotificationType,
     escrow: EscrowRecord,
     recipientAddress: string,
   ): Promise<void> {
+    const requestId = crypto.randomUUID();
     let providerMessageId: string | null = null;
     try {
+      this.logger.log(`Dispatching SendGrid ${type} notification [Request-ID: ${requestId}]`);
       const response = await this.sendGrid.send({
         to: recipientAddress,
         templateId: `trustlink-${type.toLowerCase()}`,
         dynamicTemplateData: { escrowId: escrow.id, itemName: escrow.itemName },
+        headers: { 'X-Request-ID': requestId },
       });
       providerMessageId = this.extractProviderId(response);
     } catch (error) {
-      this.logger.error(`SendGrid ${type} notification failed`, error);
+      this.logger.error(`SendGrid ${type} notification failed [Request-ID: ${requestId}]`, error);
     }
 
     await this.prisma.notification.create({
@@ -99,19 +103,21 @@ export class NotificationsService {
   }
 
   private async dispatchSms(
-    type: 'FUNDED' | 'SHIPPED',
+    type: NotificationType,
     escrow: EscrowRecord,
     recipientAddress: string,
   ): Promise<void> {
+    const requestId = crypto.randomUUID();
     let providerMessageId: string | null = null;
     try {
+      this.logger.log(`Dispatching Twilio ${type} notification [Request-ID: ${requestId}]`);
       const response = await this.twilio.messages.create({
         to: recipientAddress,
         body: `${type}: ${escrow.itemName}`,
       });
       providerMessageId = response.sid ?? null;
     } catch (error) {
-      this.logger.error(`Twilio ${type} notification failed`, error);
+      this.logger.error(`Twilio ${type} notification failed [Request-ID: ${requestId}]`, error);
     }
 
     await this.prisma.notification.create({

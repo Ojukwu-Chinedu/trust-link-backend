@@ -4,7 +4,7 @@ import type { EscrowState } from '../../prisma/prisma.service';
 
 export class VendorEscrowsQueryDto {
   @IsOptional()
-  @IsIn(['FUNDED', 'SHIPPED', 'DELIVERED', 'RELEASED', 'COMPLETED', 'REFUNDED'])
+  @IsIn(['FUNDED', 'SHIPPED', 'DELIVERED', 'RELEASED', 'COMPLETED', 'REFUNDED', 'CANCELLED'])
   state?: EscrowState;
 
   @IsOptional()

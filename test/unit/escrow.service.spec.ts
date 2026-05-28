@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { NotificationsService } from '../../src/notifications/notifications.service';
@@ -26,6 +27,11 @@ describe('EscrowService.handleShipment (issue #16)', () => {
     state: 'FUNDED',
     trackingId: null,
     shippedAt: null,
+    deliveredAt: null,
+    deliveryRecordedAt: null,
+    autoReleaseSubmittedAt: null,
+    autoReleaseTxHash: null,
+    disputeId: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
@@ -87,7 +93,7 @@ describe('EscrowService.handleShipment (issue #16)', () => {
 
     await expect(
       service.handleShipment('escrow-1', 'vendor-address', 'TRK-123'),
-    ).rejects.toThrow(BadRequestException);
+    ).rejects.toThrow(ConflictException);
   });
 
   it('throws BadRequestException for an empty tracking ID', async () => {

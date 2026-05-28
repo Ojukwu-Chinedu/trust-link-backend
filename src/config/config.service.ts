@@ -1,54 +1,85 @@
 import { Injectable } from '@nestjs/common';
-import { z } from 'zod';
+import { ConfigService as NestConfigService } from '@nestjs/config';
 
-const configSchema = z.object({
-  PORT: z.string().default('3000').transform(Number),
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  SEP10_JWT_SECRET: z.string().min(32, 'SEP10_JWT_SECRET must be at least 32 characters'),
-  ADMIN_ADDRESS: z.string().min(1, 'ADMIN_ADDRESS is required'),
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  SENDGRID_API_KEY: z.string().optional(),
-  TWILIO_ACCOUNT_SID: z.string().optional(),
-  TWILIO_AUTH_TOKEN: z.string().optional(),
-  STELLAR_NETWORK: z.enum(['TESTNET', 'MAINNET']).default('TESTNET'),
-});
-
-export type Config = z.infer<typeof configSchema>;
+export interface Config {
+  PORT: number;
+  DATABASE_URL: string;
+  SEP10_JWT_SECRET: string;
+  ADMIN_ADDRESS: string;
+  NODE_ENV: 'development' | 'production' | 'test';
+  SENDGRID_API_KEY?: string;
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
+  STELLAR_NETWORK: 'TESTNET' | 'MAINNET';
+  ALLOWED_ORIGINS?: string;
+  STELLAR_WEBHOOK_SECRET?: string;
+  LOG_LEVEL?: string;
+  API_BASE_URL?: string;
+}
 
 @Injectable()
 export class ConfigService {
-  private readonly config: Config;
-
-  constructor() {
-    const result = configSchema.safeParse(process.env);
-    
-    if (!result.success) {
-      const errors = result.error.issues.map(
-        (err) => `${err.path.join('.')}: ${err.message}`
-      ).join('\n');
-      throw new Error(`Configuration validation failed:\n${errors}`);
-    }
-    
-    this.config = result.data;
-  }
+  constructor(
+    private readonly nestConfigService: NestConfigService<Config, true>,
+  ) {}
 
   get<K extends keyof Config>(key: K): Config[K] {
-    return this.config[key];
+    const val = this.nestConfigService.get<Config[K]>(key, { infer: true });
+    return val as Config[K];
   }
 
   get all(): Config {
-    return { ...this.config };
+    return {
+      PORT: this.get('PORT'),
+      DATABASE_URL: this.get('DATABASE_URL'),
+      SEP10_JWT_SECRET: this.get('SEP10_JWT_SECRET'),
+      ADMIN_ADDRESS: this.get('ADMIN_ADDRESS'),
+      NODE_ENV: this.get('NODE_ENV'),
+      SENDGRID_API_KEY: this.nestConfigService.get('SENDGRID_API_KEY', {
+        infer: true,
+      }),
+      TWILIO_ACCOUNT_SID: this.nestConfigService.get('TWILIO_ACCOUNT_SID', {
+        infer: true,
+      }),
+      TWILIO_AUTH_TOKEN: this.nestConfigService.get('TWILIO_AUTH_TOKEN', {
+        infer: true,
+      }),
+      STELLAR_NETWORK: this.get('STELLAR_NETWORK'),
+      ALLOWED_ORIGINS: this.nestConfigService.get('ALLOWED_ORIGINS', {
+        infer: true,
+      }),
+      STELLAR_WEBHOOK_SECRET: this.nestConfigService.get(
+        'STELLAR_WEBHOOK_SECRET',
+        { infer: true },
+      ),
+      LOG_LEVEL: this.nestConfigService.get('LOG_LEVEL', { infer: true }),
+      API_BASE_URL: this.nestConfigService.get('API_BASE_URL', { infer: true }),
+    };
+  }
+
+  /**
+   * Returns the list of allowed CORS origins parsed from the ALLOWED_ORIGINS
+   * environment variable (comma-separated). Falls back to an empty array so
+   * that no origin is allowed when the variable is not set in production.
+   */
+  getAllowedOrigins(): string[] {
+    const raw = this.nestConfigService.get('ALLOWED_ORIGINS', { infer: true });
+    if (!raw) return [];
+    return raw
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
   }
 
   isDevelopment(): boolean {
-    return this.config.NODE_ENV === 'development';
+    return this.get('NODE_ENV') === 'development';
   }
 
   isProduction(): boolean {
-    return this.config.NODE_ENV === 'production';
+    return this.get('NODE_ENV') === 'production';
   }
 
   isTest(): boolean {
-    return this.config.NODE_ENV === 'test';
+    return this.get('NODE_ENV') === 'test';
   }
 }

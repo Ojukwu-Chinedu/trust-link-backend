@@ -5,7 +5,6 @@ import {
   Injectable,
   NotFoundException,
   Logger,
-  ConflictException,
 } from '@nestjs/common';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EscrowRecord } from '../prisma/prisma.service';
@@ -141,6 +140,30 @@ export class EscrowService {
 
   private buildPaymentUrl(id: string): string {
     return `https://trust-link.local/pay/${id}`;
+  }
+
+  async cancelEscrow(
+    escrowId: string,
+    callerAddress: string,
+  ): Promise<EscrowRecord> {
+    const escrow = await this.findById(escrowId);
+
+    if (
+      escrow.vendorAddress !== callerAddress &&
+      escrow.buyerAddress !== callerAddress
+    ) {
+      throw new ForbiddenException(
+        'Only the vendor or buyer can cancel this escrow',
+      );
+    }
+
+    if (escrow.state !== 'FUNDED') {
+      throw new ConflictException(
+        `Cannot cancel escrow in ${escrow.state} state. Only FUNDED escrows can be cancelled.`,
+      );
+    }
+
+    return this.escrowRepository.markCancelled(escrowId);
   }
 
   async handleShipment(

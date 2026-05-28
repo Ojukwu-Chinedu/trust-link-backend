@@ -45,4 +45,15 @@ export class EscrowController {
   ) {
     return this.escrowService.handleShipment(id, user.address, dto.trackingId);
   }
+
+  @Patch(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
+  @RateLimit({ windowMs: 60000, max: 10 })
+  cancelEscrow(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.escrowService.cancelEscrow(id, user.address);
+  }
 }
