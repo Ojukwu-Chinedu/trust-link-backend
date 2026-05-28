@@ -7,16 +7,19 @@ import {
 import * as crypto from 'crypto';
 import { ConfigService } from '../config/config.service';
 import { EscrowRepository } from '../escrow/escrow.repository';
+import { PrismaService } from '../prisma/prisma.service';
 import { StellarWebhookDto } from './dto/stellar-webhook.dto';
 
 /**
  * Issue #76 – Stellar Horizon webhook processing.
+ * Issue #77 – Cursor persistence: processed operation IDs are stored in the
+ *             database so deduplication survives service restarts.
  *
  * Responsibilities:
  *  1. Verify the HMAC-SHA256 signature supplied by Horizon so only genuine
  *     callbacks are accepted.
  *  2. Deduplicate events using the operation `id` field – Horizon may retry
- *     delivery, so we must be idempotent.
+ *     delivery across restarts, so the cursor is persisted in PostgreSQL.
  *  3. On a verified deposit confirmation, find the matching escrow by the
  *     destination address and update its state.
  */
@@ -24,17 +27,10 @@ import { StellarWebhookDto } from './dto/stellar-webhook.dto';
 export class StellarWebhookService {
   private readonly logger = new Logger(StellarWebhookService.name);
 
-  /**
-   * In-process idempotency store.
-   * For production use this should be backed by Redis or a DB table, but the
-   * in-memory set is sufficient for the scope of this issue and keeps the
-   * implementation free of external dependencies.
-   */
-  private readonly processedIds = new Set<string>();
-
   constructor(
     private readonly configService: ConfigService,
     private readonly escrowRepository: EscrowRepository,
+    private readonly prisma: PrismaService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -55,8 +51,11 @@ export class StellarWebhookService {
   ): Promise<{ received: boolean; skipped?: boolean; reason?: string }> {
     this.verifySignature(rawBody, signature);
 
-    // --- Idempotency check ---------------------------------------------------
-    if (this.processedIds.has(dto.id)) {
+    // --- Idempotency check (DB-backed, survives restarts) --------------------
+    const existing = await this.prisma.processedWebhookEvent.findUnique({
+      where: { operationId: dto.id },
+    });
+    if (existing) {
       this.logger.log(
         JSON.stringify({
           msg: 'stellar.webhook.duplicate',
@@ -66,14 +65,18 @@ export class StellarWebhookService {
       return { received: true, skipped: true, reason: 'duplicate' };
     }
 
-    // Mark as seen *before* processing so concurrent retries are also blocked.
-    this.processedIds.add(dto.id);
+    // Persist before processing so concurrent Horizon retries are blocked.
+    await this.prisma.processedWebhookEvent.create({
+      data: { operationId: dto.id },
+    });
 
     try {
       await this.processEvent(dto);
     } catch (err) {
-      // Remove from the set so the event can be retried on the next delivery.
-      this.processedIds.delete(dto.id);
+      // Roll back the cursor so the event can be retried on the next delivery.
+      await this.prisma.processedWebhookEvent.delete({
+        where: { operationId: dto.id },
+      });
       throw err;
     }
 

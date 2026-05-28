@@ -74,6 +74,11 @@ export interface NotificationRecord {
   createdAt: Date;
 }
 
+export interface ProcessedWebhookEventRecord {
+  operationId: string;
+  processedAt: Date;
+}
+
 type EscrowCreateInput = Omit<
   EscrowRecord,
   | 'id'
@@ -143,6 +148,7 @@ export class PrismaService implements OnModuleDestroy {
   private disputes = new Map<string, DisputeRecord>();
   private notifications = new Map<string, NotificationRecord>();
   private vendorProfiles = new Map<string, VendorProfileRecord>();
+  private webhookEvents = new Map<string, ProcessedWebhookEventRecord>();
   private escrowId = 1;
   private disputeId = 1;
   private notificationId = 1;
@@ -353,6 +359,43 @@ export class PrismaService implements OnModuleDestroy {
     },
   };
 
+  processedWebhookEvent = {
+    findUnique: ({
+      where,
+    }: {
+      where: { operationId: string };
+    }): Promise<ProcessedWebhookEventRecord | null> => {
+      const event = this.webhookEvents.get(where.operationId);
+      return Promise.resolve(event ? { ...event } : null);
+    },
+    create: ({
+      data,
+    }: {
+      data: { operationId: string };
+    }): Promise<ProcessedWebhookEventRecord> => {
+      const event: ProcessedWebhookEventRecord = {
+        operationId: data.operationId,
+        processedAt: new Date(),
+      };
+      this.webhookEvents.set(data.operationId, event);
+      return Promise.resolve({ ...event });
+    },
+    delete: ({
+      where,
+    }: {
+      where: { operationId: string };
+    }): Promise<ProcessedWebhookEventRecord | null> => {
+      const event = this.webhookEvents.get(where.operationId) ?? null;
+      this.webhookEvents.delete(where.operationId);
+      return Promise.resolve(event ? { ...event } : null);
+    },
+    deleteMany: (): Promise<{ count: number }> => {
+      const count = this.webhookEvents.size;
+      this.webhookEvents.clear();
+      return Promise.resolve({ count });
+    },
+  };
+
   vendorProfile = {
     create: ({
       data,
@@ -411,6 +454,7 @@ export class PrismaService implements OnModuleDestroy {
     await this.notification.deleteMany();
     await this.dispute.deleteMany();
     await this.escrow.deleteMany();
+    await this.processedWebhookEvent.deleteMany();
     this.escrowId = 1;
     this.disputeId = 1;
     this.notificationId = 1;

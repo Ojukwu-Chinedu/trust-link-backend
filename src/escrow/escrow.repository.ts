@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { CacheService } from '../cache/cache.service';
 import {
   EscrowRecord,
   EscrowState,
@@ -6,9 +7,22 @@ import {
 } from '../prisma/prisma.service';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 
+const ESCROW_CACHE_TTL = 60; // seconds
+
 @Injectable()
 export class EscrowRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
+
+  private cacheKey(id: string): string {
+    return `escrow:${id}`;
+  }
+
+  private async invalidate(id: string): Promise<void> {
+    await this.cache.del(this.cacheKey(id));
+  }
 
   create(dto: CreateEscrowDto, vendorAddress: string): Promise<EscrowRecord> {
     return this.prisma.escrow.create({
@@ -30,8 +44,12 @@ export class EscrowRepository {
       .then((results) => results[0] ?? null);
   }
 
-  findById(id: string): Promise<EscrowRecord | null> {
-    return this.prisma.escrow.findUnique({ where: { id } });
+  async findById(id: string): Promise<EscrowRecord | null> {
+    const cached = await this.cache.get<EscrowRecord>(this.cacheKey(id));
+    if (cached) return cached;
+    const record = await this.prisma.escrow.findUnique({ where: { id } });
+    if (record) await this.cache.set(this.cacheKey(id), record, ESCROW_CACHE_TTL);
+    return record;
   }
 
   findByVendor(vendorAddress: string): Promise<EscrowRecord[]> {
@@ -42,12 +60,16 @@ export class EscrowRepository {
     return this.prisma.escrow.findMany({ where: { buyerAddress } });
   }
 
-  updateState(id: string, state: EscrowState): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({ where: { id }, data: { state } });
+  async updateState(id: string, state: EscrowState): Promise<EscrowRecord> {
+    const result = await this.prisma.escrow.update({ where: { id }, data: { state } });
+    await this.invalidate(id);
+    return result;
   }
 
-  updateTracking(id: string, trackingId: string): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({ where: { id }, data: { trackingId } });
+  async updateTracking(id: string, trackingId: string): Promise<EscrowRecord> {
+    const result = await this.prisma.escrow.update({ where: { id }, data: { trackingId } });
+    await this.invalidate(id);
+    return result;
   }
 
   // Pagination helper used by upstream
@@ -79,36 +101,44 @@ export class EscrowRepository {
       });
   }
 
-  markShipped(id: string, trackingId: string): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({
+  async markShipped(id: string, trackingId: string): Promise<EscrowRecord> {
+    const result = await this.prisma.escrow.update({
       where: { id },
       data: { state: 'SHIPPED', trackingId, shippedAt: new Date() },
     });
+    await this.invalidate(id);
+    return result;
   }
 
-  markCompleted(id: string): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({
+  async markCompleted(id: string): Promise<EscrowRecord> {
+    const result = await this.prisma.escrow.update({
       where: { id },
       data: { state: 'COMPLETED' },
     });
+    await this.invalidate(id);
+    return result;
   }
 
-  markRefunded(id: string): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({
+  async markRefunded(id: string): Promise<EscrowRecord> {
+    const result = await this.prisma.escrow.update({
       where: { id },
       data: { state: 'REFUNDED' },
     });
+    await this.invalidate(id);
+    return result;
   }
 
-  markReleased(id: string): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({
+  async markReleased(id: string): Promise<EscrowRecord> {
+    const result = await this.prisma.escrow.update({
       where: { id },
       data: { state: 'RELEASED' },
     });
+    await this.invalidate(id);
+    return result;
   }
 
-  markDelivered(id: string, deliveredAt = new Date()): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({
+  async markDelivered(id: string, deliveredAt = new Date()): Promise<EscrowRecord> {
+    const result = await this.prisma.escrow.update({
       where: { id },
       data: {
         state: 'DELIVERED',
@@ -116,14 +146,16 @@ export class EscrowRepository {
         deliveryRecordedAt: deliveredAt,
       },
     });
+    await this.invalidate(id);
+    return result;
   }
 
-  markAutoReleaseCompleted(
+  async markAutoReleaseCompleted(
     id: string,
     txHash: string,
     submittedAt = new Date(),
   ): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({
+    const result = await this.prisma.escrow.update({
       where: { id },
       data: {
         state: 'COMPLETED',
@@ -131,16 +163,20 @@ export class EscrowRepository {
         autoReleaseTxHash: txHash,
       },
     });
+    await this.invalidate(id);
+    return result;
   }
 
-  markCancelled(id: string): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({
+  async markCancelled(id: string): Promise<EscrowRecord> {
+    const result = await this.prisma.escrow.update({
       where: { id },
       data: {
         state: 'CANCELLED',
         cancelledAt: new Date(),
       },
     });
+    await this.invalidate(id);
+    return result;
   }
 
   findShippedWithTracking(): Promise<EscrowRecord[]> {
@@ -180,23 +216,29 @@ export class EscrowRepository {
     if (!escrow || escrow.autoReleaseSubmittedAt !== null) {
       return null;
     }
-    return this.prisma.escrow.update({
+    const result = await this.prisma.escrow.update({
       where: { id },
       data: { autoReleaseSubmittedAt: new Date() },
     });
+    await this.invalidate(id);
+    return result;
   }
 
-  clearAutoReleaseSubmitting(id: string): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({
+  async clearAutoReleaseSubmitting(id: string): Promise<EscrowRecord> {
+    const result = await this.prisma.escrow.update({
       where: { id },
       data: { autoReleaseSubmittedAt: null },
     });
+    await this.invalidate(id);
+    return result;
   }
 
-  markAutoReleased(id: string, txHash: string): Promise<EscrowRecord> {
-    return this.prisma.escrow.update({
+  async markAutoReleased(id: string, txHash: string): Promise<EscrowRecord> {
+    const result = await this.prisma.escrow.update({
       where: { id },
       data: { state: 'RELEASED', autoReleaseTxHash: txHash },
     });
+    await this.invalidate(id);
+    return result;
   }
 }

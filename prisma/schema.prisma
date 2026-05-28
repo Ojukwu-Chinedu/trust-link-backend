@@ -154,3 +154,13 @@ model VendorTrackingSettings {
 
   vendor                  VendorProfile      @relation(fields: [vendorAddress], references: [address], onDelete: Cascade)
 }
+
+// Issue #77 – Persistent cursor for the Stellar webhook listener.
+// Storing processed operation IDs in the database ensures Horizon retries
+// that arrive after a service restart are still deduplicated correctly.
+model ProcessedWebhookEvent {
+  operationId String   @id
+  processedAt DateTime @default(now())
+
+  @@index([processedAt])
+}

@@ -30,6 +30,9 @@ import { ConfigService } from './config.service';
         LOG_LEVEL: Joi.string()
           .valid('trace', 'debug', 'info', 'warn', 'error', 'fatal')
           .default('info'),
+        // Issue #103 – Redis connection URL for response caching.
+        // Omitting this disables caching gracefully (no-op fallback).
+        REDIS_URL: Joi.string().uri().optional(),
       }),
     }),
   ],

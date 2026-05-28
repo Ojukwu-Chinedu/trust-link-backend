@@ -15,6 +15,7 @@ export interface Config {
   STELLAR_WEBHOOK_SECRET?: string;
   LOG_LEVEL?: string;
   API_BASE_URL?: string;
+  REDIS_URL?: string;
 }
 
 @Injectable()
