@@ -13,6 +13,8 @@ export class DisputeRepository {
   create(data: {
     escrowId: string;
     reason: string;
+    description: string;
+    evidenceUrls?: string[];
     status?: DisputeState;
   }): Promise<DisputeRecord> {
     return this.prisma.dispute.create({ data });

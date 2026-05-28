@@ -15,12 +15,17 @@ import type { AuthUser } from '../auth/auth-user';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
+import { OpenDisputeDto } from './dto/open-dispute.dto';
 import { EscrowService } from './escrow.service';
+import { BuyerDisputeService } from './buyer-dispute.service';
 import { RateLimit } from '../common/decorators/rate-limit.decorator';
 
 @Controller('escrow')
 export class EscrowController {
-  constructor(private readonly escrowService: EscrowService) {}
+  constructor(
+    private readonly escrowService: EscrowService,
+    private readonly buyerDisputeService: BuyerDisputeService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -55,5 +60,27 @@ export class EscrowController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.escrowService.cancelEscrow(id, user.address);
+  }
+
+  @Post(':id/dispute')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtGuard)
+  @RateLimit({ windowMs: 60000, max: 5 })
+  openDispute(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: OpenDisputeDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.buyerDisputeService.openDispute(id, user.address, dto);
+  }
+
+  @Get(':id/dispute')
+  @UseGuards(JwtGuard)
+  @RateLimit({ windowMs: 60000, max: 30 })
+  getDispute(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.buyerDisputeService.getDispute(id, user.address);
   }
 }

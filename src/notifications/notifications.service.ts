@@ -54,6 +54,10 @@ export class NotificationsService {
     return this.dispatch('DISPUTED', escrow, escrow.vendorAddress);
   }
 
+  notifyDisputedAdmin(escrow: EscrowRecord, adminAddress: string): Promise<void> {
+    return this.dispatch('DISPUTED', escrow, adminAddress);
+  }
+
   notifyCompleted(escrow: EscrowRecord): Promise<void> {
     return this.dispatch('COMPLETED', escrow, escrow.buyerAddress);
   }

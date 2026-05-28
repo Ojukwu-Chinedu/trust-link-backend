@@ -1,9 +1,11 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AdminStatsModule } from './admin/stats/admin-stats.module';
+import { DisputeModule as AdminDisputeModule } from './admin/dispute/dispute.module';
 import { QueueDashboardModule } from './admin/queues/queue-dashboard.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { Sep10Module } from './auth/sep10/sep10.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { LoggerModule } from './common/logger/logger.module';
@@ -24,6 +26,9 @@ import { StressTestModule } from './stress-test/stress-test.module';
     PrismaModule,
     LoggerModule,
 
+    // Auth
+    Sep10Module,
+
     // Feature modules
     EscrowModule,
     StellarModule,
@@ -31,6 +36,7 @@ import { StressTestModule } from './stress-test/stress-test.module';
 
     // Admin modules
     AdminStatsModule,
+    AdminDisputeModule,
     QueueDashboardModule, // issue #75 – BullMQ dashboard at GET /admin/queues
 
     // Webhook receivers

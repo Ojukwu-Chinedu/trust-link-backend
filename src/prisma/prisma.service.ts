@@ -54,6 +54,8 @@ export interface DisputeRecord {
   id: string;
   escrowId: string;
   reason: string;
+  description: string;
+  evidenceUrls: string[];
   status: DisputeState;
   resolvedAt: Date | null;
   createdAt: Date;
@@ -98,10 +100,11 @@ type EscrowCreateInput = Omit<
 
 type DisputeCreateInput = Omit<
   DisputeRecord,
-  'id' | 'status' | 'resolvedAt' | 'createdAt' | 'updatedAt'
+  'id' | 'status' | 'resolvedAt' | 'createdAt' | 'updatedAt' | 'evidenceUrls'
 > & {
   status?: DisputeState;
   resolvedAt?: Date | null;
+  evidenceUrls?: string[];
 };
 
 type EscrowUpdateInput = Partial<
@@ -129,7 +132,7 @@ type VendorProfileUpdateInput = Partial<
 >;
 
 type DisputeUpdateInput = Partial<
-  Pick<DisputeRecord, 'status' | 'resolvedAt' | 'reason' | 'escrowId'>
+  Pick<DisputeRecord, 'status' | 'resolvedAt' | 'reason' | 'escrowId' | 'evidenceUrls'>
 >;
 
 @Injectable()
@@ -249,6 +252,7 @@ export class PrismaService implements OnModuleDestroy {
         ...data,
         id: String(this.disputeId++),
         status: data.status ?? 'OPEN',
+        evidenceUrls: data.evidenceUrls ?? [],
         resolvedAt: data.resolvedAt ?? null,
         createdAt: now,
         updatedAt: now,

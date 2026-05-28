@@ -93,6 +93,10 @@ export class Sep10Service {
     return this.serverKeypair.publicKey();
   }
 
+  getNetworkPassphrase(): string {
+    return this.networkPassphrase;
+  }
+
   // ── JWT helpers ──────────────────────────────────────────────────────────
 
   private issueJwt(sub: string): string {
