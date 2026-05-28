@@ -69,6 +69,8 @@ export interface NotificationRecord {
   channel: NotificationChannel;
   recipientAddress: string;
   providerMessageId: string | null;
+  attemptCount: number;
+  lastResponseCode: number | null;
   createdAt: Date;
 }
 

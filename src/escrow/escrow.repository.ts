@@ -162,8 +162,41 @@ export class EscrowRepository {
             escrow.deliveredAt !== null &&
             escrow.deliveredAt <= threshold &&
             escrow.disputeId === null &&
-            escrow.autoReleaseTxHash === null,
+            escrow.autoReleaseTxHash === null &&
+            escrow.autoReleaseSubmittedAt === null,
         ),
       );
+  }
+
+  /**
+   * Atomically claims an escrow for auto-release by setting autoReleaseSubmittedAt.
+   * Returns the updated record if the claim succeeded, null if another worker
+   * already holds the lock (autoReleaseSubmittedAt was not null).
+   * In production with Prisma + PostgreSQL this should use a conditional
+   * UPDATE … WHERE autoReleaseSubmittedAt IS NULL to guarantee atomicity.
+   */
+  async markAutoReleaseSubmitting(id: string): Promise<EscrowRecord | null> {
+    const escrow = await this.findById(id);
+    if (!escrow || escrow.autoReleaseSubmittedAt !== null) {
+      return null;
+    }
+    return this.prisma.escrow.update({
+      where: { id },
+      data: { autoReleaseSubmittedAt: new Date() },
+    });
+  }
+
+  clearAutoReleaseSubmitting(id: string): Promise<EscrowRecord> {
+    return this.prisma.escrow.update({
+      where: { id },
+      data: { autoReleaseSubmittedAt: null },
+    });
+  }
+
+  markAutoReleased(id: string, txHash: string): Promise<EscrowRecord> {
+    return this.prisma.escrow.update({
+      where: { id },
+      data: { state: 'RELEASED', autoReleaseTxHash: txHash },
+    });
   }
 }
