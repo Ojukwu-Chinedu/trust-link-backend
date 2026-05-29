@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AdminStatsModule } from './admin/stats/admin-stats.module';
 import { DisputeModule as AdminDisputeModule } from './admin/dispute/dispute.module';
 import { QueueDashboardModule } from './admin/queues/queue-dashboard.module';
@@ -10,7 +11,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { Sep10Module } from './auth/sep10/sep10.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
-import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { LoggerModule } from './common/logger/logger.module';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { SecurityMiddleware } from './common/middleware/security.middleware';
@@ -54,6 +54,23 @@ import { CacheService } from './common/cache.service';
     // Webhook receivers
     WebhooksModule, // issue #76 – POST /webhooks/stellar
     StressTestModule,
+    
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          name: 'auth',
+          ttl: config.get<number>('AUTH_CHALLENGE_WINDOW') || 60000,
+          limit: config.get<number>('AUTH_CHALLENGE_LIMIT') || 10,
+        },
+        {
+          name: 'public',
+          ttl: config.get<number>('PUBLIC_WINDOW') || 60000,
+          limit: config.get<number>('PUBLIC_LIMIT') || 60,
+        },
+      ],
+    }),
   ],
   controllers: [AppController],
   providers: [
@@ -65,7 +82,7 @@ import { CacheService } from './common/cache.service';
     },
     {
       provide: APP_GUARD,
-      useClass: RateLimitGuard,
+      useClass: ThrottlerGuard,
     },
   ],
 })

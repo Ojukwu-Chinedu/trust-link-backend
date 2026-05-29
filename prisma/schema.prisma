@@ -40,6 +40,7 @@ model Escrow {
 
   @@index([vendorAddress])
   @@index([buyerAddress])
+  @@index([vendorAddress, state])
 }
 
 model Dispute {
@@ -163,4 +164,28 @@ model ProcessedWebhookEvent {
   processedAt DateTime @default(now())
 
   @@index([processedAt])
+}
+
+model RefreshToken {
+  id            String   @id @default(cuid())
+  userId        String
+  tokenHash     String   @unique
+  parentTokenId String?
+  revoked       Boolean  @default(false)
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Nonce {
+  id            String   @id @default(cuid())
+  nonce         String   @unique
+  walletAddress String
+  challenge     String
+  used          Boolean  @default(false)
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([walletAddress])
 }

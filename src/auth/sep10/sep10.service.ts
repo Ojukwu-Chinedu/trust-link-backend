@@ -1,5 +1,5 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { createHmac } from 'crypto';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import { createHmac, randomBytes } from 'crypto';
 import {
   Keypair,
   Networks,
@@ -7,26 +7,28 @@ import {
   WebAuth,
 } from '@stellar/stellar-sdk';
 import { ConfigService } from '../../config/config.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class Sep10Service {
-  /** Server-side signing keypair — rotated per process start. */
+  private readonly logger = new Logger(Sep10Service.name);
   private readonly serverKeypair = Keypair.random();
   private readonly networkPassphrase: string;
   private readonly homeDomain = 'trust-link.local';
   private readonly webAuthDomain = 'trust-link.local';
 
-  constructor(private readonly configService: ConfigService) {
-    this.networkPassphrase = this.configService.get('STELLAR_NETWORK') === 'MAINNET' 
-      ? Networks.PUBLIC 
-      : Networks.TESTNET;
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
+    this.networkPassphrase =
+      this.configService.get('STELLAR_NETWORK') === 'MAINNET'
+        ? Networks.PUBLIC
+        : Networks.TESTNET;
   }
-  /** Replay-prevention store: transaction hashes already consumed. */
-  private readonly usedChallenges = new Set<string>();
 
-  /** Returns a base64-encoded SEP-10 challenge XDR. */
-  buildChallenge(accountId: string, timeout = 300): string {
-    return WebAuth.buildChallengeTx(
+  async buildChallenge(accountId: string, timeout = 300): Promise<string> {
+    const challengeTx = WebAuth.buildChallengeTx(
       this.serverKeypair,
       accountId,
       this.homeDomain,
@@ -34,17 +36,29 @@ export class Sep10Service {
       this.networkPassphrase,
       this.webAuthDomain,
     );
+
+    const tx = TransactionBuilder.fromXDR(challengeTx, this.networkPassphrase);
+    const txHash = tx.hash().toString('hex');
+
+    const expiresAt = new Date(Date.now() + timeout * 1000);
+
+    await this.prisma.nonce.create({
+      data: {
+        nonce: txHash,
+        walletAddress: accountId,
+        challenge: challengeTx,
+        used: false,
+        expiresAt,
+      },
+    });
+
+    return challengeTx;
   }
 
-  /**
-   * Validates a signed challenge and returns a JWT for the authenticated account.
-   * Throws `UnauthorizedException` on any validation failure.
-   */
-  verifyAndIssueToken(challengeTx: string): string {
+  async verifyAndIssueToken(challengeTx: string): Promise<{ token: string; refreshToken: string }> {
     let clientAccountID: string;
     let txHash: string;
 
-    // 1. Read & validate challenge structure + server signature + time bounds
     try {
       const result = WebAuth.readChallengeTx(
         challengeTx,
@@ -62,12 +76,20 @@ export class Sep10Service {
       );
     }
 
-    // 2. Replay protection
-    if (this.usedChallenges.has(txHash)) {
+    const nonceRecord = await this.prisma.nonce.findUnique({
+      where: { nonce: txHash },
+    });
+
+    if (!nonceRecord) {
+      throw new UnauthorizedException('Challenge not found');
+    }
+    if (nonceRecord.used) {
       throw new UnauthorizedException('Challenge has already been used');
     }
+    if (new Date() > nonceRecord.expiresAt) {
+      throw new UnauthorizedException('Challenge expired');
+    }
 
-    // 3. Verify client signature
     try {
       WebAuth.verifyChallengeTxSigners(
         challengeTx,
@@ -83,12 +105,84 @@ export class Sep10Service {
       );
     }
 
-    // 4. Mark challenge as consumed and issue JWT
-    this.usedChallenges.add(txHash);
-    return this.issueJwt(clientAccountID);
+    await this.prisma.nonce.update({
+      where: { id: nonceRecord.id },
+      data: { used: true },
+    });
+
+    return this.generateAuthTokens(clientAccountID);
   }
 
-  /** Expose the server public key for tests / stellar.toml. */
+  async rotateRefreshToken(oldToken: string): Promise<{ token: string; refreshToken: string }> {
+    const tokenHash = this.hashToken(oldToken);
+
+    const storedToken = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+    });
+
+    if (!storedToken) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+
+    if (storedToken.revoked) {
+      this.logger.warn(`Reuse of revoked refresh token detected for user ${storedToken.userId}`);
+      await this.revokeTokenFamily(storedToken.id);
+      throw new UnauthorizedException('Refresh token reuse detected. All sessions revoked.');
+    }
+
+    if (new Date() > storedToken.expiresAt) {
+      throw new UnauthorizedException('Refresh token expired');
+    }
+
+    // Revoke the old token
+    await this.prisma.refreshToken.update({
+      where: { id: storedToken.id },
+      data: { revoked: true },
+    });
+
+    return this.generateAuthTokens(storedToken.userId, storedToken.id);
+  }
+
+  async revokeTokenFamily(tokenId: string): Promise<void> {
+    // Revoke all tokens in this family by matching parentTokenId transitively
+    // For simplicity, we can revoke all tokens for this user, or just revoke by parent chain.
+    // The issue implies revoking the entire token family. Let's just revoke all tokens for the user to be safe and invalidate all active sessions.
+    const token = await this.prisma.refreshToken.findUnique({ where: { id: tokenId } });
+    if (token) {
+      await this.prisma.refreshToken.updateMany({
+        where: { userId: token.userId },
+        data: { revoked: true },
+      });
+    }
+  }
+
+  private async generateAuthTokens(userId: string, parentTokenId?: string): Promise<{ token: string; refreshToken: string }> {
+    const token = this.issueJwt(userId);
+    
+    const refreshToken = randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(refreshToken);
+    const ttlSeconds = this.configService.get<number>('REFRESH_TOKEN_TTL') || 604800; // 7 days default
+    const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+
+    await this.prisma.refreshToken.create({
+      data: {
+        userId,
+        tokenHash,
+        parentTokenId,
+        expiresAt,
+        revoked: false,
+      },
+    });
+
+    return { token, refreshToken };
+  }
+
+  private hashToken(token: string): string {
+    return createHmac('sha256', this.configService.get('SEP10_JWT_SECRET') || 'secret')
+      .update(token)
+      .digest('hex');
+  }
+
   getServerPublicKey(): string {
     return this.serverKeypair.publicKey();
   }
@@ -97,8 +191,6 @@ export class Sep10Service {
     return this.networkPassphrase;
   }
 
-  // ── JWT helpers ──────────────────────────────────────────────────────────
-
   private issueJwt(sub: string): string {
     const now = Math.floor(Date.now() / 1000);
     const payload = { sub, iat: now, exp: now + 3600 };
@@ -106,7 +198,7 @@ export class Sep10Service {
       JSON.stringify({ alg: 'HS256', typ: 'JWT' }),
     ).toString('base64url');
     const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    const sig = createHmac('sha256', this.configService.get('SEP10_JWT_SECRET'))
+    const sig = createHmac('sha256', this.configService.get('SEP10_JWT_SECRET') || 'secret')
       .update(`${header}.${body}`)
       .digest('base64url');
     return `${header}.${body}.${sig}`;

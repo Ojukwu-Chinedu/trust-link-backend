@@ -18,8 +18,9 @@ import { UpdateShipmentDto } from './dto/update-shipment.dto';
 import { OpenDisputeDto } from './dto/open-dispute.dto';
 import { EscrowService } from './escrow.service';
 import { BuyerDisputeService } from './buyer-dispute.service';
-import { RateLimit } from '../common/decorators/rate-limit.decorator';
+import { SkipThrottle, Throttle } from '@nestjs/throttler';
 
+@SkipThrottle({ auth: true }) // Skip auth limit for escrow endpoints
 @Controller('escrow')
 export class EscrowController {
   constructor(
@@ -29,32 +30,30 @@ export class EscrowController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @RateLimit({ windowMs: 60000, max: 10 }) // 10 requests per minute
+  @Throttle({ public: { limit: 10, ttl: 60000 } })
   createEscrow(@Body() dto: CreateEscrowDto, @CurrentUser() user: AuthUser) {
     return this.escrowService.createEscrow(dto, user.address);
   }
 
   @Get(':id')
-  @RateLimit({ windowMs: 60000, max: 100 }) // 100 requests per minute
   getEscrow(@Param('id', ParseUUIDPipe) id: string) {
     return this.escrowService.findById(id);
   }
 
   @Get(':id/events')
-  @RateLimit({ windowMs: 60000, max: 100 })
+  @Throttle({ public: { limit: 100, ttl: 60000 } })
   getEvents(@Param('id', ParseUUIDPipe) id: string) {
     return this.escrowService.getEvents(id);
   }
 
   @Get(':id/tracking')
-  @RateLimit({ windowMs: 60000, max: 200 }) // 200 requests per minute
   async getTracking(@Param('id', ParseUUIDPipe) id: string) {
     return this.escrowService.getTracking(id);
   }
 
   @Patch(':id/ship')
   @HttpCode(HttpStatus.OK)
-  @RateLimit({ windowMs: 60000, max: 20 }) // 20 requests per minute
+  @Throttle({ public: { limit: 20, ttl: 60000 } })
   shipEscrow(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateShipmentDto,
@@ -66,7 +65,7 @@ export class EscrowController {
   @Patch(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtGuard)
-  @RateLimit({ windowMs: 60000, max: 10 })
+  @Throttle({ public: { limit: 10, ttl: 60000 } })
   cancelEscrow(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthUser,
@@ -77,7 +76,7 @@ export class EscrowController {
   @Post(':id/dispute')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtGuard)
-  @RateLimit({ windowMs: 60000, max: 5 })
+  @Throttle({ public: { limit: 5, ttl: 60000 } })
   openDispute(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: OpenDisputeDto,
@@ -88,7 +87,7 @@ export class EscrowController {
 
   @Get(':id/dispute')
   @UseGuards(JwtGuard)
-  @RateLimit({ windowMs: 60000, max: 30 })
+  @Throttle({ public: { limit: 30, ttl: 60000 } })
   getDispute(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthUser,

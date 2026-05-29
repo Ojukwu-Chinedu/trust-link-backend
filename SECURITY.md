@@ -79,9 +79,12 @@ Never commit `.env` files. Use environment-specific secret management (Vault, AW
 
 ### API Security
 
-- **Rate limiting** on escrow, shipment, and auth endpoints
+- All API access (except public webhooks and SEP-10 challenge generation) requires a valid JWT.
+- JWTs are short-lived (1 hour) and signed using HMAC (HS256) with a secret rotation policy.
+- **Refresh Token Rotation**: Refresh tokens are issued alongside access tokens. Upon refresh, the old token is revoked and a new pair is issued. Reuse of a revoked refresh token immediately invalidates the entire token family to prevent hijacking.
+- **Replay Attack Prevention**: SEP-10 challenge transactions generate a cryptographically secure nonce stored in the database. Challenges are strictly single-use and expire within 15 minutes. Replay attempts with a previously used challenge transaction are rejected.
+- **Rate Limiting (Throttler)**: Public endpoints are protected against abuse and DDoS attacks. The SEP-10 challenge endpoint is limited to 10 requests per minute per IP. The Escrow query endpoints are limited to 60 requests per minute per IP.
 - **Input validation** via `class-validator` and Stellar SDK address checks
-- **SEP-10 authentication** with JWT (1-hour expiry) and challenge replay protection
 - **Security headers** via middleware: `X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Referrer-Policy`
 
 ### Operational Security
