@@ -25,27 +25,27 @@ enum DisputeStatus {
 }
 
 model Escrow {
-  id            String         @id @default(uuid())
-  itemName      String
-  itemRef       String
-  amount        Decimal        @db.Decimal(18, 8)
-  currency      String
-  buyerAddress  String
-  vendorAddress String
-  state         EscrowState    @default(CREATED)
-  trackingId    String?
-  shippedAt     DateTime?
-  deliveredAt   DateTime?
-  deliveryRecordedAt DateTime?
+  id                     String        @id @default(uuid())
+  itemName               String
+  itemRef                String
+  amount                 Decimal       @db.Decimal(18, 8)
+  currency               String
+  buyerAddress           String
+  vendorAddress          String
+  state                  EscrowState   @default(CREATED)
+  trackingId             String?
+  shippedAt              DateTime?
+  deliveredAt            DateTime?
+  deliveryRecordedAt     DateTime?
   autoReleaseSubmittedAt DateTime?
-  autoReleaseTxHash String?
-  disputeId     String?
-  cancelledAt   DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  disputes      Dispute[]
-  notifications Notification[]
-  vendor        VendorProfile  @relation("VendorEscrows", fields: [vendorAddress], references: [address])
+  autoReleaseTxHash      String?
+  disputeId              String?
+  cancelledAt            DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  disputes               Dispute[]
+  notifications          Notification[]
+  vendor                 VendorProfile @relation("VendorEscrows", fields: [vendorAddress], references: [address])
 
   @@index([vendorAddress])
   @@index([buyerAddress])
@@ -53,6 +53,7 @@ model Escrow {
   @@index([vendorAddress, itemRef])
   @@index([state, trackingId])
   @@index([state, createdAt])
+  @@index([state, deliveredAt])
 }
 
 model Dispute {
@@ -85,28 +86,28 @@ model Notification {
 }
 
 model VendorProfile {
-  address             String              @id
-  businessName        String
-  email               String?
-  phone               String?
-  description         String?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  address          String                  @id
+  businessName     String
+  email            String?
+  phone            String?
+  description      String?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
 
-  accountDetails      VendorAccountDetails?
-  trackingSettings    VendorTrackingSettings?
-  escrows             Escrow[]            @relation("VendorEscrows")
+  accountDetails   VendorAccountDetails?
+  trackingSettings VendorTrackingSettings?
+  escrows          Escrow[]                @relation("VendorEscrows")
 }
 
 model VendorAccountDetails {
-  id                  String              @id @default(cuid())
-  vendorAddress       String              @unique
+  id                  String    @id @default(cuid())
+  vendorAddress       String    @unique
   businessLicense     String?
   taxId               String?
   bankAccountNumber   String?
   bankRoutingNumber   String?
-  paymentMethods      String[]            @default([])
-  preferredCurrency   String              @default("USD")
+  paymentMethods      String[]  @default([])
+  preferredCurrency   String    @default("USD")
   billingAddress      String?
   billingCity         String?
   billingState        String?
@@ -118,53 +119,51 @@ model VendorAccountDetails {
   shippingCountry     String?
   shippingPostalCode  String?
   websiteUrl          String?
-  socialMediaLinks    String[]            @default([])
+  socialMediaLinks    String[]  @default([])
   businessHours       String?
-  timezone            String              @default("UTC")
-  language            String              @default("en")
-  verificationStatus  String              @default("PENDING")
+  timezone            String    @default("UTC")
+  language            String    @default("en")
+  verificationStatus  String    @default("PENDING")
   verifiedAt          DateTime?
-  kycStatus           String              @default("NOT_STARTED")
+  kycStatus           String    @default("NOT_STARTED")
   kycCompletedAt      DateTime?
-  riskScore           Int                 @default(0)
+  riskScore           Int       @default(0)
   complianceNotes     String?
   customFields        Json?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  vendor              VendorProfile       @relation(fields: [vendorAddress], references: [address], onDelete: Cascade)
+  vendor VendorProfile @relation(fields: [vendorAddress], references: [address], onDelete: Cascade)
 }
 
 model VendorTrackingSettings {
-  id                      String              @id @default(cuid())
-  vendorAddress           String              @unique
-  enableTracking          Boolean             @default(true)
-  trackingProvider       String?
-  trackingApiKey          String?
-  autoUpdateTracking     Boolean             @default(false)
-  trackingUpdateInterval Int                 @default(3600)
-  notifyOnDelivery       Boolean             @default(true)
-  notifyOnDelay          Boolean             @default(true)
-  notifyOnException      Boolean             @default(true)
-  delayThresholdHours    Int                 @default(24)
-  deliveryConfirmation   Boolean             @default(true)
-  requireSignature      Boolean             @default(false)
-  insuranceRequired      Boolean             @default(false)
-  insuranceValue        Float?
-  customTrackingRules    Json?
-  webhookUrl             String?
-  webhookSecret          String?
-  notificationChannels   String[]            @default(["EMAIL"])
-  trackingHistoryRetentionDays Int          @default(90)
-  createdAt              DateTime            @default(now())
-  updatedAt              DateTime            @updatedAt
+  id                           String    @id @default(cuid())
+  vendorAddress                String    @unique
+  enableTracking               Boolean   @default(true)
+  trackingProvider             String?
+  trackingApiKey               String?
+  autoUpdateTracking           Boolean   @default(false)
+  trackingUpdateInterval       Int       @default(3600)
+  notifyOnDelivery             Boolean   @default(true)
+  notifyOnDelay                Boolean   @default(true)
+  notifyOnException            Boolean   @default(true)
+  delayThresholdHours          Int       @default(24)
+  deliveryConfirmation         Boolean   @default(true)
+  requireSignature             Boolean   @default(false)
+  insuranceRequired            Boolean   @default(false)
+  insuranceValue               Float?
+  customTrackingRules          Json?
+  webhookUrl                   String?
+  webhookSecret                String?
+  notificationChannels         String[]  @default(["EMAIL"])
+  trackingHistoryRetentionDays Int       @default(90)
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
 
-  vendor                  VendorProfile      @relation(fields: [vendorAddress], references: [address], onDelete: Cascade)
+  vendor VendorProfile @relation(fields: [vendorAddress], references: [address], onDelete: Cascade)
 }
 
-// Issue #77 – Persistent cursor for the Stellar webhook listener.
-// Storing processed operation IDs in the database ensures Horizon retries
-// that arrive after a service restart are still deduplicated correctly.
+// Issue #77 - Persistent cursor for the Stellar webhook listener.
 model ProcessedWebhookEvent {
   operationId String   @id
   processedAt DateTime @default(now())
