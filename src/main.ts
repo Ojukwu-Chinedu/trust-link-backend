@@ -2,6 +2,7 @@ import './tracing/tracing.bootstrap';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import compression from 'compression';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { ConfigService } from './config/config.service';
 import { JsonLoggerService } from './common/logger/json-logger.service';
@@ -19,6 +20,29 @@ async function bootstrap() {
   app.useLogger(jsonLogger);
 
   const configService = app.get(ConfigService);
+
+  // ── HTTP security headers (issue #84) ─────────────────────────────────────
+  // Helmet injects a hardened set of response headers (CSP, HSTS, frame and
+  // cross-origin policies, etc.) to protect browser clients against injection
+  // vulnerabilities. The CSP connect-src is widened to the Stellar network so
+  // the app can still reach the required blockchain API systems (Horizon and
+  // Soroban RPC, on both mainnet and testnet).
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          defaultSrc: ["'self'"],
+          connectSrc: ["'self'", 'https://*.stellar.org'],
+          objectSrc: ["'none'"],
+          frameAncestors: ["'self'"],
+          upgradeInsecureRequests: [],
+        },
+      },
+      // This service is a JSON API consumed by separate frontend origins.
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   // ── CORS – restrict to known frontend origins (issue #85) ─────────────────
   const allowedOrigins = configService.getAllowedOrigins();
