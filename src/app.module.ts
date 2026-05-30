@@ -13,6 +13,7 @@ import { Sep10Module } from './auth/sep10/sep10.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggerModule } from './common/logger/logger.module';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { SecurityMiddleware } from './common/middleware/security.middleware';
 import { TracingMiddleware } from './tracing/tracing.middleware';
 import { TracingModule } from './tracing/tracing.module';
@@ -90,7 +91,12 @@ import { CacheService } from './common/cache.service';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply(SecurityMiddleware, TracingMiddleware, LoggerMiddleware)
+      .apply(
+        RequestIdMiddleware,
+        SecurityMiddleware,
+        TracingMiddleware,
+        LoggerMiddleware,
+      )
       .forRoutes('*');
   }
 }

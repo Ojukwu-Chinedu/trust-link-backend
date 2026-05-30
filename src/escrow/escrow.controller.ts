@@ -30,6 +30,7 @@ export class EscrowController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtGuard)
   @Throttle({ public: { limit: 10, ttl: 60000 } })
   createEscrow(@Body() dto: CreateEscrowDto, @CurrentUser() user: AuthUser) {
     return this.escrowService.createEscrow(dto, user.address);
@@ -53,6 +54,7 @@ export class EscrowController {
 
   @Patch(':id/ship')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
   @Throttle({ public: { limit: 20, ttl: 60000 } })
   shipEscrow(
     @Param('id', ParseUUIDPipe) id: string,

@@ -13,6 +13,7 @@ interface ErrorResponse {
   statusCode: number;
   timestamp: string;
   path: string;
+  requestId?: string;
   message: string;
   error?: string;
   details?: unknown;
@@ -30,7 +31,9 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     const errorResponse = this.buildErrorResponse(exception, request);
-    
+    // Echo the correlation id so clients can match an error to its log records.
+    errorResponse.requestId = request.requestId;
+
     // Log error details
     this.logError(exception, request, errorResponse);
 
@@ -150,6 +153,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       url,
       ip,
       userAgent,
+      requestId: errorResponse.requestId,
       statusCode: errorResponse.statusCode,
       timestamp: errorResponse.timestamp,
     };

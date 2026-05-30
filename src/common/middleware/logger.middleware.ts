@@ -42,6 +42,7 @@ export class LoggerMiddleware implements NestMiddleware {
         pid: process.pid,
         env: process.env.NODE_ENV ?? 'development',
         context: 'HTTP',
+        requestId: req.requestId,
         msg: `${method} ${originalUrl} ${statusCode}`,
         method,
         url: originalUrl,

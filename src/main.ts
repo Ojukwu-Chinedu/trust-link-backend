@@ -2,9 +2,11 @@ import './tracing/tracing.bootstrap';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import compression from 'compression';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { ConfigService } from './config/config.service';
 import { JsonLoggerService } from './common/logger/json-logger.service';
+import { SanitizationPipe } from './common/pipes/sanitization.pipe';
 
 async function bootstrap() {
   // Bootstrap with a temporary console logger so early errors are visible,
@@ -18,6 +20,29 @@ async function bootstrap() {
   app.useLogger(jsonLogger);
 
   const configService = app.get(ConfigService);
+
+  // ── HTTP security headers (issue #84) ─────────────────────────────────────
+  // Helmet injects a hardened set of response headers (CSP, HSTS, frame and
+  // cross-origin policies, etc.) to protect browser clients against injection
+  // vulnerabilities. The CSP connect-src is widened to the Stellar network so
+  // the app can still reach the required blockchain API systems (Horizon and
+  // Soroban RPC, on both mainnet and testnet).
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        useDefaults: true,
+        directives: {
+          defaultSrc: ["'self'"],
+          connectSrc: ["'self'", 'https://*.stellar.org'],
+          objectSrc: ["'none'"],
+          frameAncestors: ["'self'"],
+          upgradeInsecureRequests: [],
+        },
+      },
+      // This service is a JSON API consumed by separate frontend origins.
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   // ── CORS – restrict to known frontend origins (issue #85) ─────────────────
   const allowedOrigins = configService.getAllowedOrigins();
@@ -65,7 +90,9 @@ async function bootstrap() {
   // (1 KB) avoids the overhead for tiny payloads that wouldn't benefit.
   app.use(compression({ threshold: 1024 }));
 
-  // ── Validation pipe ────────────────────────────────────────────────────────
+  // ── Validation + sanitization pipes (issue #83) ───────────────────────────
+  // ValidationPipe rejects malformed objects before they reach handlers, then
+  // SanitizationPipe strips dangerous characters from every string field.
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -73,6 +100,7 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transformOptions: { enableImplicitConversion: true },
     }),
+    new SanitizationPipe(),
   );
 
   // ── Graceful shutdown ──────────────────────────────────────────────────────
