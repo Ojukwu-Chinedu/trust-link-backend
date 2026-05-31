@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService, VendorProfileRecord } from '../prisma/prisma.service';
 import { CreateVendorProfileDto } from './dto/create-vendor-profile.dto';
 import { UpdateVendorProfileDto } from './dto/update-vendor-profile.dto';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 
 @Injectable()
 export class VendorProfileRepository {
@@ -37,5 +38,47 @@ export class VendorProfileRepository {
       where: { address },
       data: dto,
     });
+  }
+
+  /** Updates notification preferences for the vendor, creating tracking settings if they don't exist. */
+  async updateNotificationPreferences(
+    address: string,
+    dto: UpdateNotificationPreferencesDto,
+  ): Promise<{ trackingSettings: Record<string, unknown> }> {
+    // Upsert VendorTrackingSettings to ensure it exists
+    const trackingSettings = await this.prisma.vendorTrackingSettings.upsert({
+      where: { vendorAddress: address },
+      create: {
+        vendorAddress: address,
+        notifyOnDelivery: dto.notifyOnDelivery ?? true,
+        notifyOnDelay: dto.notifyOnDelay ?? true,
+        notifyOnException: dto.notifyOnException ?? true,
+        notificationChannels: dto.notificationChannels ?? ['EMAIL'],
+        webhookUrl: dto.webhookUrl ?? null,
+        webhookSecret: dto.webhookSecret ?? null,
+      },
+      update: {
+        ...(dto.notifyOnDelivery !== undefined && {
+          notifyOnDelivery: dto.notifyOnDelivery,
+        }),
+        ...(dto.notifyOnDelay !== undefined && {
+          notifyOnDelay: dto.notifyOnDelay,
+        }),
+        ...(dto.notifyOnException !== undefined && {
+          notifyOnException: dto.notifyOnException,
+        }),
+        ...(dto.notificationChannels !== undefined && {
+          notificationChannels: dto.notificationChannels,
+        }),
+        ...(dto.webhookUrl !== undefined && {
+          webhookUrl: dto.webhookUrl,
+        }),
+        ...(dto.webhookSecret !== undefined && {
+          webhookSecret: dto.webhookSecret,
+        }),
+      },
+    });
+
+    return { trackingSettings };
   }
 }

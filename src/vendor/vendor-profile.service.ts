@@ -7,6 +7,7 @@ import {
 import { VendorProfileRecord } from '../prisma/prisma.service';
 import { CreateVendorProfileDto } from './dto/create-vendor-profile.dto';
 import { UpdateVendorProfileDto } from './dto/update-vendor-profile.dto';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 import { VendorProfileRepository } from './vendor-profile.repository';
 
 @Injectable()
@@ -51,5 +52,27 @@ export class VendorProfileService {
       throw new NotFoundException('Vendor profile not found');
     }
     return this.repository.update(address, dto);
+  }
+
+  /** Updates notification preferences for the vendor, creating tracking settings if needed. */
+  async updateNotificationPreferences(
+    address: string,
+    dto: UpdateNotificationPreferencesDto,
+  ): Promise<{ trackingSettings: Record<string, unknown> }> {
+    const keys = Object.keys(dto).filter(
+      (k) => (dto as Record<string, unknown>)[k] !== undefined,
+    );
+    if (keys.length === 0) {
+      throw new BadRequestException(
+        'No notification preference fields provided',
+      );
+    }
+
+    const existing = await this.repository.findByAddress(address);
+    if (!existing) {
+      throw new NotFoundException('Vendor profile not found');
+    }
+
+    return this.repository.updateNotificationPreferences(address, dto);
   }
 }

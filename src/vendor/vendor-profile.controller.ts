@@ -13,6 +13,7 @@ import type { AuthUser } from '../auth/auth-user';
 import { JwtGuard } from '../auth/guards/jwt.guard';
 import { CreateVendorProfileDto } from './dto/create-vendor-profile.dto';
 import { UpdateVendorProfileDto } from './dto/update-vendor-profile.dto';
+import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
 import { VendorProfileService } from './vendor-profile.service';
 
 @Controller('vendor/profile')
@@ -22,10 +23,7 @@ export class VendorProfileController {
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  create(
-    @Body() dto: CreateVendorProfileDto,
-    @CurrentUser() user: AuthUser,
-  ) {
+  create(@Body() dto: CreateVendorProfileDto, @CurrentUser() user: AuthUser) {
     return this.vendorProfileService.createProfile(user.address, dto);
   }
 
@@ -35,10 +33,19 @@ export class VendorProfileController {
   }
 
   @Patch()
-  update(
-    @Body() dto: UpdateVendorProfileDto,
+  update(@Body() dto: UpdateVendorProfileDto, @CurrentUser() user: AuthUser) {
+    return this.vendorProfileService.updateProfile(user.address, dto);
+  }
+
+  @Patch('notifications')
+  @HttpCode(HttpStatus.OK)
+  updateNotifications(
+    @Body() dto: UpdateNotificationPreferencesDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.vendorProfileService.updateProfile(user.address, dto);
+    return this.vendorProfileService.updateNotificationPreferences(
+      user.address,
+      dto,
+    );
   }
 }
