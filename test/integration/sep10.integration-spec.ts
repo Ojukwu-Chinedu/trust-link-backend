@@ -11,18 +11,90 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Keypair, Networks, TransactionBuilder } from '@stellar/stellar-sdk';
 import request from 'supertest';
-import { AppModule } from '../../src/app.module';
+import { Sep10Controller } from '../../src/auth/sep10/sep10.controller';
 import { Sep10Service } from '../../src/auth/sep10/sep10.service';
+import { ConfigService } from '../../src/config/config.service';
+import { PrismaService } from '../../src/prisma/prisma.service';
 
 describe('SEP-10 authentication (issue #23)', () => {
   let app: INestApplication;
   let sep10Service: Sep10Service;
+  const mockNonces = new Map<string, any>();
+  const mockRefreshTokens = new Map<string, any>();
+  let nextId = 1;
   /** A fresh client keypair per test run. */
   const clientKeypair = Keypair.random();
 
   beforeAll(async () => {
+    const mockConfigService = {
+      get: jest.fn((key: string) => {
+        switch (key) {
+          case 'STELLAR_NETWORK':
+            return 'TESTNET';
+          case 'SEP10_JWT_SECRET':
+            return 'a-very-long-secret-key-for-testing-purposes-32chars';
+          case 'REFRESH_TOKEN_TTL':
+            return 604800;
+          default:
+            return undefined;
+        }
+      }),
+    } as unknown as ConfigService;
+
+    const mockPrismaService = {
+      nonce: {
+        create: jest.fn(async ({ data }: any) => {
+          const record = { ...data, id: `nonce-${nextId++}` };
+          mockNonces.set(data.nonce, record);
+          return record;
+        }),
+        findUnique: jest.fn(async ({ where }: any) => {
+          return mockNonces.get(where.nonce) ?? null;
+        }),
+        update: jest.fn(async ({ where, data }: any) => {
+          const record =
+            mockNonces.get(where.id) ??
+            Array.from(mockNonces.values()).find((entry) => entry.id === where.id) ??
+            mockNonces.get(where.nonce) ??
+            null;
+          if (!record) return null;
+          Object.assign(record, data);
+          return record;
+        }),
+      },
+      refreshToken: {
+        create: jest.fn(async ({ data }: any) => {
+          const record = { ...data, id: `refresh-${nextId++}` };
+          mockRefreshTokens.set(data.tokenHash, record);
+          return record;
+        }),
+        findUnique: jest.fn(async ({ where }: any) => {
+          return mockRefreshTokens.get(where.tokenHash) ?? null;
+        }),
+        update: jest.fn(async ({ where, data }: any) => {
+          const record = mockRefreshTokens.get(where.tokenHash) ?? null;
+          if (!record) return null;
+          Object.assign(record, data);
+          return record;
+        }),
+        updateMany: jest.fn(async ({ where, data }: any) => {
+          for (const record of mockRefreshTokens.values()) {
+            if (record.userId === where.userId) {
+              Object.assign(record, data);
+            }
+          }
+          return { count: 0 };
+        }),
+      },
+    } as unknown as PrismaService;
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      controllers: [Sep10Controller],
+      providers: [
+        Sep10Service,
+        { provide: ConfigService, useValue: mockConfigService },
+        { provide: PrismaService, useValue: mockPrismaService },
+      ],
     }).compile();
 
     app = moduleFixture.createNestApplication();

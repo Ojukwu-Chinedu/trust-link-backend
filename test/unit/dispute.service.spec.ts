@@ -11,7 +11,7 @@ import request from 'supertest';
 import { AdminGuard } from '../../src/admin/guards/admin.guard';
 import { DisputeService } from '../../src/admin/dispute/dispute.service';
 import { EscrowRepository } from '../../src/escrow/escrow.repository';
-import { EscrowRecord } from '../../src/prisma/prisma.service';
+import { EscrowRecord, PrismaService } from '../../src/prisma/prisma.service';
 import { ContractService } from '../../src/stellar/contract.service';
 import { DisputeController } from '../../src/admin/dispute/dispute.controller';
 import { JwtGuard } from '../../src/auth/guards/jwt.guard';
@@ -47,6 +47,7 @@ describe('DisputeService (issue #25)', () => {
   let service: DisputeService;
   let repository: jest.Mocked<EscrowRepository>;
   let contractService: jest.Mocked<ContractService>;
+  let prisma: jest.Mocked<PrismaService>;
 
   beforeEach(async () => {
     repository = {
@@ -59,11 +60,14 @@ describe('DisputeService (issue #25)', () => {
       resolveDispute: jest.fn(),
     } as unknown as jest.Mocked<ContractService>;
 
+    prisma = {} as unknown as jest.Mocked<PrismaService>;
+
     const moduleRef = await Test.createTestingModule({
       providers: [
         DisputeService,
         { provide: EscrowRepository, useValue: repository },
         { provide: ContractService, useValue: contractService },
+        { provide: PrismaService, useValue: prisma },
       ],
     }).compile();
 
@@ -124,6 +128,19 @@ describe('DisputeService (issue #25)', () => {
       ConflictException,
     );
     expect(contractService.resolveDispute).not.toHaveBeenCalled();
+  });
+
+  it('does not update escrow state when contract resolution fails', async () => {
+    repository.findById.mockResolvedValue(shippedEscrow);
+    contractService.resolveDispute.mockRejectedValue(
+      new Error('Network failure'),
+    );
+
+    await expect(service.resolve('escrow-1', 'RELEASE')).rejects.toThrow(
+      'Network failure',
+    );
+    expect(repository.markCompleted).not.toHaveBeenCalled();
+    expect(repository.markRefunded).not.toHaveBeenCalled();
   });
 
   it('throws NotFoundException when escrow does not exist', async () => {
