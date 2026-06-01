@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -9,6 +10,7 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/auth-user';
@@ -34,6 +36,17 @@ export class EscrowController {
   @Throttle({ public: { limit: 10, ttl: 60000 } })
   createEscrow(@Body() dto: CreateEscrowDto, @CurrentUser() user: AuthUser) {
     return this.escrowService.createEscrow(dto, user.address);
+  }
+
+  @Post('evidence-upload')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtGuard)
+  @Throttle({ public: { limit: 30, ttl: 60000 } })
+  evidenceUpload(
+    @Query('fileName') fileName: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.escrowService.generateEvidenceUploadUrl(user.address, fileName);
   }
 
   @Get(':id')
@@ -73,6 +86,17 @@ export class EscrowController {
     @CurrentUser() user: AuthUser,
   ) {
     return this.escrowService.cancelEscrow(id, user.address);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtGuard)
+  @Throttle({ public: { limit: 10, ttl: 60000 } })
+  cancelPendingEscrow(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.escrowService.cancelPendingEscrow(id, user.address);
   }
 
   @Post(':id/dispute')

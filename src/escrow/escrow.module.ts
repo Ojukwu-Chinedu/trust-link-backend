@@ -3,6 +3,7 @@ import { JwtGuard } from '../auth/guards/jwt.guard';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { DisputeModule } from '../dispute/dispute.module';
+import { StellarModule } from '../stellar/stellar.module';
 import { S3PresignService } from '../common/services/s3-presign.service';
 import { CacheService } from '../common/cache.service';
 import { EscrowController } from './escrow.controller';
@@ -12,7 +13,7 @@ import { EscrowService } from './escrow.service';
 import { BuyerDisputeService } from './buyer-dispute.service';
 
 @Module({
-  imports: [PrismaModule, NotificationsModule, DisputeModule],
+  imports: [PrismaModule, NotificationsModule, DisputeModule, StellarModule],
   controllers: [EscrowController, VendorEscrowController],
   providers: [
     EscrowService,

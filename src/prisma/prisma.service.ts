@@ -1,6 +1,7 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 
 export type EscrowState =
+  | 'CREATED'
   | 'FUNDED'
   | 'SHIPPED'
   | 'DELIVERED'
@@ -187,6 +188,10 @@ export class PrismaService implements OnModuleDestroy {
   private disputes = new Map<string, DisputeRecord>();
   private notifications = new Map<string, NotificationRecord>();
   private vendorProfiles = new Map<string, VendorProfileRecord>();
+  private vendorTrackingSettingsStore = new Map<
+    string,
+    Record<string, unknown>
+  >();
   private webhookEvents = new Map<string, ProcessedWebhookEventRecord>();
   private refreshTokens = new Map<string, RefreshTokenRecord>();
   private nonces = new Map<string, NonceRecord>();
@@ -674,6 +679,41 @@ export class PrismaService implements OnModuleDestroy {
     },
   };
 
+  vendorTrackingSettings = {
+    findUnique: ({
+      where,
+    }: {
+      where: { vendorAddress: string };
+    }): Promise<Record<string, unknown> | null> => {
+      const settings = this.vendorTrackingSettingsStore.get(
+        where.vendorAddress,
+      );
+      return Promise.resolve(settings ? { ...settings } : null);
+    },
+    upsert: ({
+      where,
+      create,
+      update,
+    }: {
+      where: { vendorAddress: string };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }): Promise<Record<string, unknown>> => {
+      const existing = this.vendorTrackingSettingsStore.get(
+        where.vendorAddress,
+      );
+      if (existing) {
+        const updated = { ...existing, ...update, updatedAt: new Date() };
+        this.vendorTrackingSettingsStore.set(where.vendorAddress, updated);
+        return Promise.resolve({ ...updated });
+      }
+      const now = new Date();
+      const created = { ...create, createdAt: now, updatedAt: now };
+      this.vendorTrackingSettingsStore.set(where.vendorAddress, created);
+      return Promise.resolve({ ...created });
+    },
+  };
+
   /** Clears all in-memory Prisma test data and resets generated IDs. */
   async reset(): Promise<void> {
     await this.refreshToken.deleteMany();
@@ -684,6 +724,7 @@ export class PrismaService implements OnModuleDestroy {
     await this.dispute.deleteMany();
     await this.escrow.deleteMany();
     await this.processedWebhookEvent.deleteMany();
+    this.vendorTrackingSettingsStore.clear();
     this.escrowId = 1;
     this.disputeId = 1;
     this.notificationId = 1;

@@ -10,6 +10,8 @@ import { NotificationsService } from '../../src/notifications/notifications.serv
 import { EscrowRecord } from '../../src/prisma/prisma.service';
 import { EscrowRepository } from '../../src/escrow/escrow.repository';
 import { EscrowService } from '../../src/escrow/escrow.service';
+import { S3PresignService } from '../../src/common/services/s3-presign.service';
+import { ContractService } from '../../src/stellar/contract.service';
 
 describe('EscrowService.handleShipment (issue #16)', () => {
   let service: EscrowService;
@@ -53,6 +55,8 @@ describe('EscrowService.handleShipment (issue #16)', () => {
         EscrowService,
         { provide: EscrowRepository, useValue: repository },
         { provide: NotificationsService, useValue: notifications },
+        { provide: S3PresignService, useValue: {} },
+        { provide: ContractService, useValue: {} },
       ],
     }).compile();
 

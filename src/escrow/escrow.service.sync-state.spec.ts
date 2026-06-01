@@ -84,6 +84,8 @@ describe('EscrowService.syncStateFromChain', () => {
     service = new EscrowService(
       repo,
       notifications,
+      {} as any, // s3PresignService
+      {} as any, // contractService
       undefined, // logisticsService
       undefined, // cacheService
       prisma,

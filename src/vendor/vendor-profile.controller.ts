@@ -37,6 +37,11 @@ export class VendorProfileController {
     return this.vendorProfileService.updateProfile(user.address, dto);
   }
 
+  @Get('notifications')
+  getNotifications(@CurrentUser() user: AuthUser) {
+    return this.vendorProfileService.getNotificationPreferences(user.address);
+  }
+
   @Patch('notifications')
   @HttpCode(HttpStatus.OK)
   updateNotifications(

@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -12,9 +13,12 @@ import { EscrowRecord } from '../prisma/prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LogisticsService } from '../logistics/logistics.service';
 import { CacheService } from '../common/cache.service';
+import { ContractService } from '../stellar/contract.service';
 import { EscrowResponseDto } from './dto/escrow-response.dto';
 import { EscrowSummaryDto } from './dto/escrow-summary.dto';
 import { CreateEscrowDto } from './dto/create-escrow.dto';
+import { EvidenceUploadResponseDto } from './dto/evidence-upload.dto';
+import { S3PresignService } from '../common/services/s3-presign.service';
 import { EscrowRepository } from './escrow.repository';
 
 export type EscrowWithPaymentUrl = EscrowRecord & {
@@ -55,6 +59,8 @@ export class EscrowService {
   constructor(
     private readonly escrowRepository: EscrowRepository,
     private readonly notificationsService: NotificationsService,
+    private readonly s3PresignService: S3PresignService,
+    private readonly contractService: ContractService,
     @Optional()
     private readonly logisticsService?: LogisticsService,
     @Optional()
@@ -255,6 +261,29 @@ export class EscrowService {
     return `https://trust-link.local/pay/${id}`;
   }
 
+  /** Generates a pre-signed upload URL for evidence files scoped to the caller. */
+  generateEvidenceUploadUrl(
+    callerAddress: string,
+    fileName: string,
+  ): EvidenceUploadResponseDto {
+    const ext = fileName.includes('.') ? fileName.split('.').pop() : 'bin';
+    const uuid = crypto.randomUUID();
+    const storagePath = `evidence/${callerAddress}/`;
+    const objectKey = `${storagePath}${uuid}.${ext}`;
+    const publicUrl = `https://storage.trustlink.io/${objectKey}`;
+    const presigned = this.s3PresignService.presign(publicUrl);
+    const expiresInSeconds = 3600;
+
+    return {
+      uploadUrl: presigned,
+      publicUrl,
+      expiresAt: new Date(Date.now() + expiresInSeconds * 1000).toISOString(),
+      expiresInSeconds,
+      fileName,
+      storagePath,
+    };
+  }
+
   /** Cancels a funded escrow when requested by the buyer or vendor. */
   async cancelEscrow(
     escrowId: string,
@@ -274,6 +303,47 @@ export class EscrowService {
     if (escrow.state !== 'FUNDED') {
       throw new ConflictException(
         `Cannot cancel escrow in ${escrow.state} state. Only FUNDED escrows can be cancelled.`,
+      );
+    }
+
+    return this.escrowRepository.markCancelled(escrowId);
+  }
+
+  /** Cancels a pending (CREATED) escrow with on-chain state verification and fund refund. */
+  async cancelPendingEscrow(
+    escrowId: string,
+    callerAddress: string,
+  ): Promise<EscrowRecord> {
+    const escrow = await this.findById(escrowId);
+
+    if (
+      escrow.vendorAddress !== callerAddress &&
+      escrow.buyerAddress !== callerAddress
+    ) {
+      throw new ForbiddenException(
+        'Only the vendor or buyer can cancel this escrow',
+      );
+    }
+
+    if (escrow.state !== 'CREATED') {
+      throw new ConflictException(
+        `Cannot cancel escrow in ${escrow.state} state. Only CREATED (pending) escrows can be cancelled.`,
+      );
+    }
+
+    const chainState = await this.contractService.getEscrowState(escrowId);
+
+    if (chainState.exists && chainState.state === 'FUNDED') {
+      this.logger.log(
+        `Escrow ${escrowId} funded on-chain — submitting on-chain refund before cancellation`,
+      );
+      const txHash = await this.contractService.cancelEscrowOnChain(escrowId);
+      this.logger.log(
+        `On-chain refund submitted for escrow ${escrowId}: ${txHash}`,
+      );
+    } else if (chainState.exists && chainState.state !== 'CREATED') {
+      throw new ConflictException(
+        `On-chain escrow is in ${chainState.state} state and cannot be cancelled.`,
       );
     }
 

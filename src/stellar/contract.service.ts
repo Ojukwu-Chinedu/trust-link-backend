@@ -86,6 +86,49 @@ export class ContractService {
     throw new ContractCallFailedException('Max retries exceeded');
   }
 
+  /** Returns the current on-chain state of an escrow. */
+  async getEscrowState(
+    escrowId: string,
+  ): Promise<{ state: string; exists: boolean }> {
+    if (!this.server) {
+      return { state: 'UNKNOWN', exists: false };
+    }
+    try {
+      const result = await this.server.submitTransaction({
+        operation: 'getEscrowState',
+        escrowId,
+      });
+      return {
+        state:
+          result.status === 'ERROR'
+            ? 'UNKNOWN'
+            : (result.resultXdr ?? 'CREATED'),
+        exists: result.status !== 'ERROR',
+      };
+    } catch {
+      return { state: 'UNKNOWN', exists: false };
+    }
+  }
+
+  /** Submits an on-chain cancellation/refund transaction and returns the transaction hash. */
+  async cancelEscrowOnChain(escrowId: string): Promise<string> {
+    if (!this.server) {
+      throw new ContractCallFailedException('Stellar server is not configured');
+    }
+    const result = await this.server.submitTransaction({
+      operation: 'cancelEscrow',
+      escrowId,
+      refund: true,
+    });
+    if (result.status === 'ERROR' || result.resultXdr === 'TxFailed') {
+      throw new ContractCallFailedException();
+    }
+    if (!result.hash) {
+      throw new ContractCallFailedException('Missing transaction hash');
+    }
+    return result.hash;
+  }
+
   /** Records delivery on-chain and returns the submitted transaction hash. */
   async recordDelivery(escrowId: string): Promise<string> {
     if (!this.server) {

@@ -3,6 +3,7 @@ import { PrismaService, VendorProfileRecord } from '../prisma/prisma.service';
 import { CreateVendorProfileDto } from './dto/create-vendor-profile.dto';
 import { UpdateVendorProfileDto } from './dto/update-vendor-profile.dto';
 import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
+import { NotificationPreferencesResponseDto } from './dto/notification-preferences-response.dto';
 
 @Injectable()
 export class VendorProfileRepository {
@@ -80,5 +81,29 @@ export class VendorProfileRepository {
     });
 
     return { trackingSettings };
+  }
+
+  /** Returns notification preferences for the vendor, falling back to platform defaults if not configured. */
+  async findNotificationPreferences(
+    address: string,
+  ): Promise<NotificationPreferencesResponseDto> {
+    const settings = await this.prisma.vendorTrackingSettings.findUnique({
+      where: { vendorAddress: address },
+    });
+
+    return {
+      notifyOnDelivery: (settings?.notifyOnDelivery as boolean) ?? true,
+      notifyOnDelay: (settings?.notifyOnDelay as boolean) ?? true,
+      notifyOnException: (settings?.notifyOnException as boolean) ?? true,
+      notificationChannels: (settings?.notificationChannels as string[]) ?? [
+        'EMAIL',
+      ],
+      webhookUrl: (settings?.webhookUrl as string | null) ?? null,
+      enableTracking: (settings?.enableTracking as boolean) ?? true,
+      delayThresholdHours: (settings?.delayThresholdHours as number) ?? 24,
+      deliveryConfirmation: (settings?.deliveryConfirmation as boolean) ?? true,
+      trackingHistoryRetentionDays:
+        (settings?.trackingHistoryRetentionDays as number) ?? 90,
+    };
   }
 }

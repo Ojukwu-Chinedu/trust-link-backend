@@ -8,6 +8,7 @@ import { VendorProfileRecord } from '../prisma/prisma.service';
 import { CreateVendorProfileDto } from './dto/create-vendor-profile.dto';
 import { UpdateVendorProfileDto } from './dto/update-vendor-profile.dto';
 import { UpdateNotificationPreferencesDto } from './dto/update-notification-preferences.dto';
+import { NotificationPreferencesResponseDto } from './dto/notification-preferences-response.dto';
 import { VendorProfileRepository } from './vendor-profile.repository';
 
 @Injectable()
@@ -74,5 +75,12 @@ export class VendorProfileService {
     }
 
     return this.repository.updateNotificationPreferences(address, dto);
+  }
+
+  /** Returns notification preferences with platform defaults for unconfigured fields. */
+  async getNotificationPreferences(
+    address: string,
+  ): Promise<NotificationPreferencesResponseDto> {
+    return this.repository.findNotificationPreferences(address);
   }
 }

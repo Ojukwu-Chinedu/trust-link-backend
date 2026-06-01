@@ -7,6 +7,8 @@ import { LogisticsService } from '../../src/logistics/logistics.service';
 import { CacheService } from '../../src/common/cache.service';
 import { NotificationsService } from '../../src/notifications/notifications.service';
 import { EscrowRecord } from '../../src/prisma/prisma.service';
+import { S3PresignService } from '../../src/common/services/s3-presign.service';
+import { ContractService } from '../../src/stellar/contract.service';
 
 describe('EscrowService.getTracking (issue #58)', () => {
   let service: EscrowService;
@@ -58,6 +60,8 @@ describe('EscrowService.getTracking (issue #58)', () => {
         { provide: LogisticsService, useValue: logisticsService },
         { provide: CacheService, useValue: cacheService },
         { provide: NotificationsService, useValue: notificationsService },
+        { provide: S3PresignService, useValue: {} },
+        { provide: ContractService, useValue: {} },
       ],
     }).compile();
 
