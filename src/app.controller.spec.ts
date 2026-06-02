@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigService } from './config/config.service';
 import { PrismaService } from './prisma/prisma.service';
+import { CacheService } from './cache/cache.service';
 
 function createMockResponse() {
   const res: Partial<Response> & {
@@ -25,9 +26,11 @@ describe('AppController', () => {
   let appController: AppController;
   let fetchSpy: jest.SpyInstance | undefined;
   let escrowFindManyMock: jest.Mock;
+  let cachePingMock: jest.Mock;
 
   beforeEach(async () => {
     escrowFindManyMock = jest.fn().mockResolvedValue([]);
+    cachePingMock = jest.fn().mockResolvedValue('ok');
 
     const mockConfigService = {
       get: jest.fn().mockImplementation((key: string) => {
@@ -52,6 +55,7 @@ describe('AppController', () => {
         AppService,
         { provide: ConfigService, useValue: mockConfigService },
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: CacheService, useValue: { ping: cachePingMock } },
       ],
     }).compile();
 
@@ -86,9 +90,37 @@ describe('AppController', () => {
         status: 'ok',
         db: 'ok',
         horizon: 'ok',
+        redis: 'ok',
         environment: 'test',
       });
       expect(typeof body.durationMs).toBe('number');
+    });
+
+    it('reports redis: disabled without making the service unhealthy', async () => {
+      cachePingMock.mockResolvedValue('disabled');
+      fetchSpy = jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue({ ok: true } as never);
+
+      const res = createMockResponse();
+      await appController.getHealth(res);
+
+      // Redis being off must not flip the overall status (graceful fallback).
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toMatchObject({ status: 'ok', redis: 'disabled' });
+    });
+
+    it('reports redis: down without returning 503', async () => {
+      cachePingMock.mockResolvedValue('down');
+      fetchSpy = jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue({ ok: true } as never);
+
+      const res = createMockResponse();
+      await appController.getHealth(res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toMatchObject({ status: 'ok', redis: 'down' });
     });
 
     it('returns 503 with db: down when the database check fails', async () => {

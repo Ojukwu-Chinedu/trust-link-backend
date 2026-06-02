@@ -117,6 +117,15 @@ export class ConfigService {
       .filter(Boolean);
   }
 
+  /**
+   * Returns the Redis connection URL, defaulting to a local instance when
+   * REDIS_URL is not configured (issue #31). Caching/rate-limiting/nonce
+   * features degrade gracefully when the resulting URL is unreachable.
+   */
+  getRedisUrl(): string {
+    return this.nestConfigService.get('REDIS_URL', { infer: true }) ?? 'redis://localhost:6379';
+  }
+
   /** Returns true when NODE_ENV is development. */
   isDevelopment(): boolean {
     return this.get('NODE_ENV') === 'development';

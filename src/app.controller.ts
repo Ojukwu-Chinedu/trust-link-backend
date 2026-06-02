@@ -10,13 +10,18 @@ import { AppService } from './app.service';
 import { getAppVersion } from './common/version';
 import { ConfigService } from './config/config.service';
 import { PrismaService } from './prisma/prisma.service';
+import { CacheService } from './cache/cache.service';
 
 type ComponentStatus = 'ok' | 'down';
+// Redis is optional infrastructure, so it has an extra 'disabled' state and does
+// not, by itself, make the service unhealthy (issue #31 — graceful fallback).
+type OptionalComponentStatus = ComponentStatus | 'disabled';
 
 interface HealthBody {
   status: ComponentStatus;
   db: ComponentStatus;
   horizon: ComponentStatus;
+  redis: OptionalComponentStatus;
   timestamp: string;
   environment: string;
   version: string;
@@ -36,6 +41,7 @@ export class AppController {
     private readonly appService: AppService,
     private readonly configService: ConfigService,
     private readonly prismaService: PrismaService,
+    private readonly cacheService: CacheService,
   ) {}
 
   @Get()
@@ -47,17 +53,21 @@ export class AppController {
   async getHealth(@Res() res: Response): Promise<Response<HealthBody>> {
     const start = Date.now();
 
-    const [db, horizon] = await Promise.all([
+    const [db, horizon, redis] = await Promise.all([
       this.checkDatabase(),
       this.checkHorizon(),
+      this.cacheService.ping(),
     ]);
 
+    // Redis is optional: a 'disabled' or 'down' Redis is reported but does not
+    // flip the overall status to unhealthy (graceful fallback — issue #31).
     const allOk = db === 'ok' && horizon === 'ok';
 
     const body: HealthBody = {
       status: allOk ? 'ok' : 'down',
       db,
       horizon,
+      redis,
       timestamp: new Date().toISOString(),
       environment: this.configService.get('NODE_ENV'),
       version: getAppVersion(),
