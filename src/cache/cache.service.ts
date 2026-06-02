@@ -59,6 +59,24 @@ export class CacheService implements OnModuleDestroy {
     }
   }
 
+  /**
+   * Liveness probe for the Redis connection (issue #31, used by GET /health).
+   * Returns:
+   *   - 'disabled' when REDIS_URL is not configured (caching intentionally off),
+   *   - 'ok'       when the server replies to PING,
+   *   - 'down'     when a configured Redis is unreachable.
+   */
+  async ping(): Promise<'ok' | 'down' | 'disabled'> {
+    if (!this.client) return 'disabled';
+    try {
+      const reply = await this.client.ping();
+      return reply === 'PONG' ? 'ok' : 'down';
+    } catch (err: unknown) {
+      this.logger.error('cache.ping failed', (err as Error).message);
+      return 'down';
+    }
+  }
+
   /** Deletes a cached Redis key when caching is enabled. */
   async del(key: string): Promise<void> {
     if (!this.client) return;
