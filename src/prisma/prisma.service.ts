@@ -943,6 +943,7 @@ export class PrismaService implements OnModuleDestroy {
     await this.escrow.deleteMany();
     await this.processedWebhookEvent.deleteMany();
     this.vendorTrackingSettingsStore.clear();
+    this.failedTransactionStore.clear();
     this.escrowId = 1;
     this.disputeId = 1;
     this.notificationId = 1;
