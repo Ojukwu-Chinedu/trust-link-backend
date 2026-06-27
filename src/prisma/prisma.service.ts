@@ -716,9 +716,27 @@ export class PrismaService implements OnModuleDestroy {
       this.nonces.set(where.id, updated);
       return Promise.resolve({ ...updated });
     },
-    deleteMany: (): Promise<{ count: number }> => {
-      const count = this.nonces.size;
-      this.nonces.clear();
+    deleteMany: ({
+      where,
+    }: {
+      where?: {
+        expiresAt?: { lt: Date };
+      };
+    } = {}): Promise<{ count: number }> => {
+      if (!where?.expiresAt?.lt) {
+        const count = this.nonces.size;
+        this.nonces.clear();
+        return Promise.resolve({ count });
+      }
+
+      const cutoff = where.expiresAt.lt;
+      let count = 0;
+      for (const [id, nonce] of this.nonces.entries()) {
+        if (nonce.expiresAt < cutoff) {
+          this.nonces.delete(id);
+          count++;
+        }
+      }
       return Promise.resolve({ count });
     },
   };

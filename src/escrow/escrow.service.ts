@@ -305,19 +305,21 @@ export class EscrowService {
     };
   }
 
-  /** Cancels a funded escrow when requested by the buyer or vendor. */
+  /** Cancels a funded escrow when requested by the buyer, vendor, or admin. */
   async cancelEscrow(
     escrowId: string,
     callerAddress: string,
+    isAdmin = false,
   ): Promise<EscrowRecord> {
     const escrow = await this.findById(escrowId);
 
     if (
+      !isAdmin &&
       escrow.vendorAddress !== callerAddress &&
       escrow.buyerAddress !== callerAddress
     ) {
       throw new ForbiddenException(
-        'Only the vendor or buyer can cancel this escrow',
+        'Only the vendor, buyer, or admin can cancel this escrow',
       );
     }
 
@@ -334,15 +336,17 @@ export class EscrowService {
   async cancelPendingEscrow(
     escrowId: string,
     callerAddress: string,
+    isAdmin = false,
   ): Promise<EscrowRecord> {
     const escrow = await this.findById(escrowId);
 
     if (
+      !isAdmin &&
       escrow.vendorAddress !== callerAddress &&
       escrow.buyerAddress !== callerAddress
     ) {
       throw new ForbiddenException(
-        'Only the vendor or buyer can cancel this escrow',
+        'Only the vendor, buyer, or admin can cancel this escrow',
       );
     }
 
@@ -376,6 +380,7 @@ export class EscrowService {
     escrowId: string,
     vendorAddress: string,
     trackingId: string,
+    isAdmin = false,
   ): Promise<EscrowRecord> {
     try {
       if (!trackingId?.trim()) {
@@ -392,12 +397,12 @@ export class EscrowService {
 
       const escrow = await this.findById(escrowId);
 
-      if (escrow.vendorAddress !== vendorAddress) {
+      if (!isAdmin && escrow.vendorAddress !== vendorAddress) {
         this.logger.warn(
           `Unauthorized shipment attempt for escrow ${escrowId} by ${vendorAddress}`,
         );
         throw new ForbiddenException(
-          'Only the escrow vendor can ship this order',
+          'Only the escrow vendor or admin can ship this order',
         );
       }
 

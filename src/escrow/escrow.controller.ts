@@ -128,6 +128,7 @@ export class EscrowController {
   @ApiResponse({ status: 200, description: 'Escrow marked as shipped.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @ApiResponse({ status: 403, description: 'Forbidden — not the escrow vendor.' })
   @ApiResponse({ status: 404, description: 'Escrow not found.' })
   @ApiResponse({ status: 429, description: 'Too many requests.' })
   @ApiResponse({ status: 500, description: 'Internal server error.' })
@@ -141,12 +142,18 @@ export class EscrowController {
     @Body() dto: UpdateShipmentDto,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.escrowService.handleShipment(id, user.address, dto.trackingId);
+    return this.escrowService.handleShipment(
+      id,
+      user.address,
+      dto.trackingId,
+      user.role === 'admin',
+    );
   }
 
   @ApiOperation({ summary: 'Cancel an active escrow transaction' })
   @ApiResponse({ status: 200, description: 'Escrow cancelled.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @ApiResponse({ status: 403, description: 'Forbidden — not the escrow vendor or buyer.' })
   @ApiResponse({ status: 404, description: 'Escrow not found.' })
   @ApiResponse({ status: 429, description: 'Too many requests.' })
   @ApiResponse({ status: 500, description: 'Internal server error.' })
@@ -159,12 +166,13 @@ export class EscrowController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.escrowService.cancelEscrow(id, user.address);
+    return this.escrowService.cancelEscrow(id, user.address, user.role === 'admin');
   }
 
   @ApiOperation({ summary: 'Delete a pending (unfunded) escrow transaction' })
   @ApiResponse({ status: 200, description: 'Pending escrow deleted.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @ApiResponse({ status: 403, description: 'Forbidden — not the escrow vendor or buyer.' })
   @ApiResponse({ status: 404, description: 'Escrow not found.' })
   @ApiResponse({ status: 429, description: 'Too many requests.' })
   @ApiResponse({ status: 500, description: 'Internal server error.' })
@@ -177,7 +185,11 @@ export class EscrowController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.escrowService.cancelPendingEscrow(id, user.address);
+    return this.escrowService.cancelPendingEscrow(
+      id,
+      user.address,
+      user.role === 'admin',
+    );
   }
 
   @ApiOperation({ summary: 'Open a dispute for an escrow transaction' })
